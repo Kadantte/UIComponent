@@ -2,41 +2,53 @@
 
 import UIKit
 
-public class WrapperAnimator: Animator {
+/// `WrapperAnimator` is a subclass of `Animator` that allows for additional
+/// animation handling by providing custom blocks for insert, update, and delete operations.
+/// It can also pass through these update operation to another animator if needed.
+public struct WrapperAnimator: Animator {
+    /// The underlying animator that can be used to perform animations along side the custom animation blocks.
     public var content: Animator?
+    /// Determines whether the `WrapperAnimator` should pass the update operation to the underlying `content` animator after executing `updateBlock`.
     public var passthroughUpdate: Bool = false
-    public var insertBlock: ((ComponentDisplayableView, UIView, CGRect) -> Void)?
-    public var updateBlock: ((ComponentDisplayableView, UIView, CGRect) -> Void)?
-    public var deleteBlock: ((ComponentDisplayableView, UIView, () -> Void) -> Void)?
+    /// A block that is executed when a new view is inserted. If `nil`, the insert operation is passed to the underlying `content` animator.
+    public var insertBlock: ((UIView, UIView, CGRect) -> Void)?
+    /// A block that is executed when a view needs to be updated. If `nil`, the update operation is passed to the underlying `content` animator.
+    public var updateBlock: ((UIView, UIView, CGRect) -> Void)?
+    /// A block that is executed when a view is deleted. If `nil`, the delete operation is passed to the underlying `content` animator.
+    public var deleteBlock: ((UIView, UIView, @escaping () -> Void) -> Void)?
 
-    public override func shift(componentView: ComponentDisplayableView, delta: CGPoint, view: UIView) {
-        (content ?? componentView.animator).shift(componentView: componentView, delta: delta, view: view)
+    public func shift(hostingView: UIView, delta: CGPoint, view: UIView) {
+        (content ?? hostingView.componentEngine.animator).shift(
+            hostingView: hostingView,
+            delta: delta,
+            view: view
+        )
     }
 
-    public override func update(componentView: ComponentDisplayableView, view: UIView, frame: CGRect) {
+    public func update(hostingView: UIView, view: UIView, frame: CGRect) {
         if let updateBlock {
-            updateBlock(componentView, view, frame)
+            updateBlock(hostingView, view, frame)
             if passthroughUpdate {
-                (content ?? componentView.animator).update(componentView: componentView, view: view, frame: frame)
+                (content ?? hostingView.componentEngine.animator).update(hostingView: hostingView, view: view, frame: frame)
             }
         } else {
-            (content ?? componentView.animator).update(componentView: componentView, view: view, frame: frame)
+            (content ?? hostingView.componentEngine.animator).update(hostingView: hostingView, view: view, frame: frame)
         }
     }
 
-    public override func insert(componentView: ComponentDisplayableView, view: UIView, frame: CGRect) {
+    public func insert(hostingView: UIView, view: UIView, frame: CGRect) {
         if let insertBlock {
-            insertBlock(componentView, view, frame)
+            insertBlock(hostingView, view, frame)
         } else {
-            (content ?? componentView.animator).insert(componentView: componentView, view: view, frame: frame)
+            (content ?? hostingView.componentEngine.animator).insert(hostingView: hostingView, view: view, frame: frame)
         }
     }
 
-    public override func delete(componentView: ComponentDisplayableView, view: UIView, completion: @escaping () -> Void) {
+    public func delete(hostingView: UIView, view: UIView, completion: @escaping () -> Void) {
         if let deleteBlock {
-            deleteBlock(componentView, view, completion)
+            deleteBlock(hostingView, view, completion)
         } else {
-            (content ?? componentView.animator).delete(componentView: componentView, view: view, completion: completion)
+            (content ?? hostingView.componentEngine.animator).delete(hostingView: hostingView, view: view, completion: completion)
         }
     }
 }

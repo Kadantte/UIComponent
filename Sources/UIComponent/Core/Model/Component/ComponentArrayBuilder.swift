@@ -2,6 +2,8 @@
 
 import Foundation
 
+/// A result builder that constructs an array of components.
+/// This builder is used to support the UIComponent USL.
 @resultBuilder
 public struct ComponentArrayBuilder {
     public static func buildExpression(_ expression: ComponentArrayContainer) -> [any Component] {
@@ -9,6 +11,9 @@ public struct ComponentArrayBuilder {
     }
     public static func buildExpression(_ expression: any Component) -> [any Component] {
         [expression]
+    }
+    public static func buildExpression(_ expression: (any Component)?) -> [any Component] {
+        [expression].compactMap { $0 }
     }
     public static func buildExpression(_ expression: [any Component]) -> [any Component] {
         expression
@@ -33,6 +38,7 @@ public struct ComponentArrayBuilder {
     }
 }
 
+/// A container that holds an array of components. It can be used within a ``ComponentArrayBuilder`` to provide a list of components.
 public protocol ComponentArrayContainer {
     var components: [any Component] { get }
 }

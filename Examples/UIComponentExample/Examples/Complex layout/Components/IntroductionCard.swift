@@ -44,6 +44,9 @@ struct IntroductionCard: ComponentBuilder {
             }
             .flex()
         }
-        .inset(10).defaultShadow().with(\.animator, AnimatedReloadAnimator()).id("introduction")
+        .inset(10)
+        .defaultShadow()
+        .with(\.componentEngine.animator, TransformAnimator())
+        .id("introduction")
     }
 }

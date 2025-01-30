@@ -2,7 +2,8 @@
 
 import UIKit
 
-/// A UIView that can render components
+/// A `UIView` that can render components.
+/// It provides simple access to the properties and method of the underlying ``ComponentEngine``
 ///
 /// You can set the ``component`` property with your component tree for it to render
 /// The render happens on the next layout cycle. But you can call ``reloadData`` to force it to render.
@@ -12,14 +13,17 @@ import UIKit
 ///
 /// See ``ComponentDisplayableView`` for usage details.
 open class ComponentView: UIView, ComponentDisplayableView {
-    lazy public var engine: ComponentEngine = ComponentEngine(view: self)
+}
 
-    open override func layoutSubviews() {
-        super.layoutSubviews()
-        engine.layoutSubview()
-    }
-
-    open override func sizeThatFits(_ size: CGSize) -> CGSize {
-        engine.sizeThatFits(size)
-    }
+/// A `UIScrollView` that can render components
+/// It provides simple access to the properties and method of the underlying ``ComponentEngine``
+///
+/// You can set the ``component`` property with your component tree for it to render
+/// The render happens on the next layout cycle. But you can call ``reloadData`` to force it to render.
+///
+/// Most of the code is written in ``ComponentDisplayableView``, since both ``ComponentView``
+/// and ``ComponentScrollView`` supports rendering components.
+///
+/// See ``ComponentDisplayableView`` for usage details.
+open class ComponentScrollView: UIScrollView, ComponentDisplayableView {
 }

@@ -77,7 +77,7 @@ class AsyncImageViewController: ComponentViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        componentView.animator = AnimatedReloadAnimator()
+        componentView.componentEngine.animator = TransformAnimator()
         title = "Async Image"
     }
 }

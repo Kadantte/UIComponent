@@ -8,66 +8,60 @@
 import UIKit
 
 #if !os(tvOS)
+/// `PrimaryMenuConfig` defines the configuration for a `PrimaryMenu`.
+/// It provides customization options such as highlight state changes and tap actions.
 @available(iOS 14.0, *)
-public struct PrimaryMenuComponent: Component {
-    let component: any Component
-    let menu: UIMenu
+public struct PrimaryMenuConfig {
+    /// The default configuration for all PrimaryMenu instances.
+    public static var `default`: PrimaryMenuConfig = PrimaryMenuConfig(onHighlightChanged: nil, didTap: nil)
 
-    public init(component: any Component, menu: UIMenu) {
-        self.component = component
-        self.menu = menu
-    }
-
-    public func layout(_ constraint: Constraint) -> SizeOverrideRenderNode<UpdateRenderNode<ViewRenderNode<PrimaryMenu>>> {
-        let renderNode = component.layout(Constraint(maxSize: constraint.maxSize))
-        return ViewComponent<PrimaryMenu>().update {
-            $0.menu = menu
-            $0.contentView.engine.reloadWithExisting(component: component, renderNode: renderNode)
-        }.size(renderNode.size).layout(constraint)
-    }
-}
-
-@available(iOS 14.0, *)
-public extension Component {
-    func primaryMenu(_ menuBuilder: () -> UIMenu) -> PrimaryMenuComponent {
-        PrimaryMenuComponent(component: self, menu: menuBuilder())
-    }
-    func primaryMenu(_ menu: UIMenu) -> PrimaryMenuComponent {
-        PrimaryMenuComponent(component: self, menu: menu)
-    }
-}
-
-@available(iOS 14.0, *)
-public struct PrimaryMenuConfiguration {
-    public static var `default` = PrimaryMenuConfiguration(onHighlightChanged: nil, didTap: nil)
-
-    // place to apply highlight state or animation to the PrimaryMenu
+    /// Closure to apply highlight state or animation to the TappableView.
     public var onHighlightChanged: ((PrimaryMenu, Bool) -> Void)?
 
-    // hook before the actual onTap is called
+    /// Closure to be called before the actual onTap action is performed.
     public var didTap: ((PrimaryMenu) -> Void)?
 
+    /// Initializes a new configuration for the `PrimaryMenu`.
+    /// - Parameters:
+    ///   - onHighlightChanged: A closure that gets called when the highlight state changes.
+    ///   - didTap: A closure that gets called when the `PrimaryMenu` is tapped.
     public init(onHighlightChanged: ((PrimaryMenu, Bool) -> Void)? = nil, didTap: ((PrimaryMenu) -> Void)? = nil) {
         self.onHighlightChanged = onHighlightChanged
         self.didTap = didTap
     }
 }
 
+@available(*, deprecated, renamed: "PrimaryMenuConfig")
+@available(iOS 14.0, *)
+public typealias PrimaryMenuConfiguration = PrimaryMenuConfig
+
+/// A UIControl subclass that displays a context menu when tapped.
 @available(iOS 14.0, *)
 public class PrimaryMenu: UIControl {
+    /// Indicates whether any `PrimaryMenu` is currently showing a menu.
     public static fileprivate(set) var isShowingMenu = false
 
-    public var configuration: PrimaryMenuConfiguration?
+    /// The configuration object that defines behavior for the `PrimaryMenu`.
+    public var config: PrimaryMenuConfig?
 
-    let contentView = ComponentView()
+    /// Deprecated: Use `config` instead.
+    @available(*, deprecated, renamed: "config")
+    public var configuration: PrimaryMenuConfig? {
+        get { config }
+        set { config = newValue }
+    }
 
+    /// A flag indicating whether the menu is currently being displayed.
     public var isShowingMenu = false
-    public var menu: UIMenu? {
+
+    /// The menu to be displayed when the control is interacted with.
+    public var menuBuilder: ((PrimaryMenu) -> UIMenu)? {
         didSet {
             guard isShowingMenu else { return }
-            if let menu {
-                contextMenuInteraction?.updateVisibleMenu({ _ in
-                    return menu
+            if let menuBuilder {
+                contextMenuInteraction?.updateVisibleMenu({ [weak self] _ in
+                    guard let self else { return UIMenu() }
+                    return menuBuilder(self)
                 })
             } else {
                 contextMenuInteraction?.dismissMenu()
@@ -75,47 +69,48 @@ public class PrimaryMenu: UIControl {
         }
     }
 
+    /// A private storage for the preferred order of menu elements.
     private var _preferredMenuElementOrder: Any?
+
+    /// The preferred order of elements within the context menu.
     @available(iOS 16.0, *)
-    var preferredMenuElementOrder: UIContextMenuConfiguration.ElementOrder {
+    public var preferredMenuElementOrder: UIContextMenuConfiguration.ElementOrder {
         get { _preferredMenuElementOrder as? UIContextMenuConfiguration.ElementOrder ?? .automatic }
         set { _preferredMenuElementOrder = newValue }
     }
 
-    public var component: (any Component)? {
-        get { contentView.component }
-        set { contentView.component = newValue }
+    /// A type-erased pointer style provider.
+    private var _pointerStyleProvider: Any?
+
+    /// A closure that provides a pointer style when the control is hovered over with a pointer device.
+    public var pointerStyleProvider: (() -> UIPointerStyle?)? {
+        get { _pointerStyleProvider as? () -> UIPointerStyle? }
+        set { _pointerStyleProvider = newValue }
     }
 
+    /// A flag indicating whether the control is currently in a pressed state.
     public private(set) var isPressed: Bool = false {
         didSet {
             guard isPressed != oldValue else { return }
-            let config = configuration ?? PrimaryMenuConfiguration.default
-            config.onHighlightChanged?(self, isPressed)
+            (config ?? .default).onHighlightChanged?(self, isPressed)
         }
     }
 
+    /// Initializes a new instance of the `PrimaryMenu`.
+    /// - Parameter frame: The frame rectangle for the control, measured in points.
     override init(frame: CGRect) {
         super.init(frame: frame)
         showsMenuAsPrimaryAction = true
         isContextMenuInteractionEnabled = true
-        addSubview(contentView)
         accessibilityTraits = .button
-        contentView.addInteraction(UIPointerInteraction(delegate: self))
+        addInteraction(UIPointerInteraction(delegate: self))
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    public override func layoutSubviews() {
-        super.layoutSubviews()
-        contentView.frame = bounds
-    }
-
-    public override func sizeThatFits(_ size: CGSize) -> CGSize {
-        contentView.sizeThatFits(size)
-    }
+    // MARK: - Touch Handling
 
     public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesBegan(touches, with: event)
@@ -132,11 +127,13 @@ public class PrimaryMenu: UIControl {
         isPressed = false
     }
 
+    // MARK: - UIContextMenuInteractionDelegate
+
     public override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
-        let config = configuration ?? PrimaryMenuConfiguration.default
-        config.didTap?(self)
-        let menuConfiguration = UIContextMenuConfiguration(actionProvider: { [menu] suggested in
-            return menu
+        (config ?? .default).didTap?(self)
+        let menuConfiguration = UIContextMenuConfiguration(actionProvider: { [menuBuilder, weak self] suggested in
+            guard let self else { return UIMenu() }
+            return menuBuilder?(self)
         })
         if #available(iOS 16.0, *) {
             menuConfiguration.preferredMenuElementOrder = self.preferredMenuElementOrder
@@ -155,13 +152,16 @@ public class PrimaryMenu: UIControl {
     }
 }
 
+// MARK: - UIPointerInteractionDelegate
+
 @available(iOS 14.0, *)
 extension PrimaryMenu: UIPointerInteractionDelegate {
-    public func pointerInteraction(_ interaction: UIPointerInteraction, regionFor request: UIPointerRegionRequest, defaultRegion: UIPointerRegion) -> UIPointerRegion? {
-        defaultRegion
-    }
     public func pointerInteraction(_ interaction: UIPointerInteraction, styleFor region: UIPointerRegion) -> UIPointerStyle? {
-        return UIPointerStyle(effect: .automatic(UITargetedPreview(view: contentView)), shape: nil)
+        if let pointerStyleProvider {
+            return pointerStyleProvider()
+        } else {
+            return UIPointerStyle(effect: .automatic(UITargetedPreview(view: self)), shape: nil)
+        }
     }
 }
 #endif

@@ -7,7 +7,9 @@
 
 import Foundation
 
-public protocol RenderNodeWrapper: RenderNode {
+/// A protocol that wraps a content `RenderNode` to and pass through all the render node methods.
+/// Its render node methods can be overriden by the conforming type.
+public protocol RenderNodeWrapper<Content>: RenderNode {
     associatedtype Content: RenderNode
     var content: Content { get }
 }
@@ -22,9 +24,6 @@ extension RenderNodeWrapper {
     public var reuseStrategy: ReuseStrategy {
         content.reuseStrategy
     }
-    public var shouldRenderView: Bool {
-        content.shouldRenderView
-    }
     public var size: CGSize {
         content.size
     }
@@ -34,8 +33,14 @@ extension RenderNodeWrapper {
     public var children: [any RenderNode] {
         content.children
     }
-    public func visibleIndexes(in frame: CGRect) -> IndexSet {
-        content.visibleIndexes(in: frame)
+    public var shouldRenderView: Bool {
+        content.shouldRenderView
+    }
+    public func visibleChildren(in frame: CGRect) -> [RenderNodeChild] {
+        content.visibleChildren(in: frame)
+    }
+    public func adjustVisibleFrame(frame: CGRect) -> CGRect {
+        content.adjustVisibleFrame(frame: frame)
     }
     public func updateView(_ view: Content.View) {
         content.updateView(view)

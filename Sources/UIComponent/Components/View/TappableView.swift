@@ -2,37 +2,111 @@
 
 import UIKit
 
+/// TappableViewConfig is a structure that defines the configuration for a TappableView.
+/// It contains closures that can be used to customize the behavior of the view when it is tapped or highlighted.
+public struct TappableViewConfig {
+    /// The default configuration for all TappableView instances.
+    public static var `default`: TappableViewConfig = TappableViewConfig(onHighlightChanged: nil, didTap: nil)
 
-public struct TappableViewConfiguration {
-    public static var `default` = TappableViewConfiguration(onHighlightChanged: nil, didTap: nil)
-
-    // place to apply highlight state or animation to the TappableView
+    /// Closure to apply highlight state or animation to the TappableView.
     public var onHighlightChanged: ((TappableView, Bool) -> Void)?
 
-    // hook before the actual onTap is called
+    /// Closure to be called before the actual onTap action is performed.
     public var didTap: ((TappableView) -> Void)?
 
+    /// Initializes a new TappableViewConfig with optional closures for handling highlight changes and tap actions.
+    /// - Parameters:
+    ///   - onHighlightChanged: A closure that is called when the highlight state changes.
+    ///   - didTap: A closure that is called before the onTap action.
     public init(onHighlightChanged: ((TappableView, Bool) -> Void)? = nil, didTap: ((TappableView) -> Void)? = nil) {
         self.onHighlightChanged = onHighlightChanged
         self.didTap = didTap
     }
 }
 
-open class TappableView: ComponentView {
-    public var configuration: TappableViewConfiguration?
+@available(*, deprecated, renamed: "TappableViewConfig")
+public typealias TappableViewConfiguration = TappableViewConfig
 
+/// TappableView is view that respond to tap and gesture events.
+/// It can be configured using ``TappableViewConfig`` and supports various gestures such as tap, double tap, and long press.
+/// 
+/// ### Handle Gesture
+/// Assign a block to ``onTap``, ``onDoubleTap``, ``onLongPress`` to handle the corresponding gesture.
+/// Normally, this class is created by using the ``Component/tappableView(_:)-ew7m`` modifier instead of manually creating an instance.
+///
+/// ```swift
+/// Text("Tap Me").tappableView { view in
+///      print("Tapped")
+/// }.onLongPress { (view, gesture) in
+///      if gesture.state == .began {
+///          print("Long pressed")
+///      }
+/// }
+/// ```
+///
+/// ### Display Context Menu
+/// TappableView supports long press context menu. Simply assign a ``contextMenuProvider`` and return a ``UIMenu`` to be displayed.
+/// ```swift
+/// Text("Show Menu").tappableView {
+/// }.contextMenuProvider {
+///     UIMenu(...) // return the menu you want to be displayed
+/// }
+/// ```
+///
+/// ### Handle Drop
+/// TappableView supports acting as a drop target. Simply assign a ``dropDelegate`` and handle the corresponding drop events.
+/// ```swift
+/// Text("Drop Here").tappableView {
+/// }.dropDelegate(yourDropDelegate)
+/// ```
+/// For more advanced drag and drop support, please create a custom View.
+///
+/// ### Pointer Style
+/// TappableView supports pointer style on iPadOS. Simply assign a ``pointerStyleProvider`` and return a ``UIPointerStyle`` to be displayed.
+/// ```swift
+/// Text("Show Pointer").tappableView {
+/// }.pointerStyleProvider {
+///    UIPointerStyle(...) // return the pointer style you want to be displayed
+/// }
+open class TappableView: UIView {
+    /// The configuration object for the TappableView, which defines the behavior of the view when it is tapped or highlighted.
+    public var config: TappableViewConfig?
+
+    /// Deprecated: Use `config` instead.
+    @available(*, deprecated, renamed: "config")
+    public var configuration: TappableViewConfig? {
+        get { config }
+        set { config = newValue }
+    }
+
+    /// A gesture recognizer for detecting single taps on the TappableView.
     public private(set) lazy var tapGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(didTap))
+    
+    /// A gesture recognizer for detecting double taps on the TappableView.
     public private(set) lazy var doubleTapGestureRecognizer: UITapGestureRecognizer = {
         let gesture = UITapGestureRecognizer(target: self, action: #selector(didDoubleTap))
         gesture.numberOfTapsRequired = 2
         return gesture
     }()
+
+    /// A interaction for managing spring loading on the TappableView.
+    public private(set) lazy var springLoadedInteraction = UISpringLoadedInteraction { [weak self] interaction, context in
+        guard let self else { return }
+        self.onSpringLoaded?(self)
+    }
+
+    /// A gesture recognizer for detecting long presses on the TappableView.
     public private(set) lazy var longPressGestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(didLongPress))
+    
     #if !os(tvOS)
+    /// An interaction object for managing the context menu in response to force touch or long press gestures.
     public private(set) lazy var contextMenuInteraction = UIContextMenuInteraction(delegate: self)
     #endif
 
+    /// The background color to be used for the preview when the TappableView is used in a context menu.
     public var previewBackgroundColor: UIColor?
+    
+    /// A closure that is called when the TappableView is tapped.
     public var onTap: ((TappableView) -> Void)? {
         didSet {
             if onTap != nil {
@@ -43,6 +117,7 @@ open class TappableView: ComponentView {
         }
     }
 
+    /// A closure that is called when a long press gesture is recognized on the TappableView.
     public var onLongPress: ((TappableView, UILongPressGestureRecognizer) -> Void)? {
         didSet {
             if onLongPress != nil {
@@ -53,6 +128,7 @@ open class TappableView: ComponentView {
         }
     }
 
+    /// A closure that is called when the TappableView is double-tapped.
     public var onDoubleTap: ((TappableView) -> Void)? {
         didSet {
             if onDoubleTap != nil {
@@ -63,8 +139,23 @@ open class TappableView: ComponentView {
         }
     }
 
+    /// A closure that is called when the TappableView is spring loaded.
+    public var onSpringLoaded: ((TappableView) -> Void)? {
+        didSet {
+            if onSpringLoaded != nil {
+                addInteraction(springLoadedInteraction)
+            } else {
+                removeInteraction(springLoadedInteraction)
+            }
+        }
+    }
+
 #if !os(tvOS)
+    /// The interaction responsible for handling drop operations on the TappableView.
     private var dropInteraction: UIDropInteraction?
+
+    /// The delegate that responds to drop interaction events.
+    /// Setting a new delegate will replace any existing drop interaction with a new one using the provided delegate.
     public weak var dropDelegate: UIDropInteractionDelegate? {
         didSet {
             guard dropDelegate !== oldValue else { return }
@@ -79,6 +170,8 @@ open class TappableView: ComponentView {
         }
     }
 
+    /// A closure that provides a preview view controller to be displayed when the TappableView is used in a context menu.
+    /// Setting this property will add a context menu interaction if it's not already present.
     public var previewProvider: (() -> UIViewController?)? {
         didSet {
             if previewProvider != nil || contextMenuProvider != nil {
@@ -89,8 +182,11 @@ open class TappableView: ComponentView {
         }
     }
 
+    /// A closure that is called when the context menu preview is committed.
     public var onCommitPreview: ((UIContextMenuInteractionCommitAnimating) -> Void)?
 
+    /// A closure that provides a context menu to be displayed when the TappableView is long-pressed.
+    /// Setting this property will add a context menu interaction if it's not already present.
     public var contextMenuProvider: ((TappableView) -> UIMenu?)? {
         didSet {
             if previewProvider != nil || contextMenuProvider != nil {
@@ -101,7 +197,11 @@ open class TappableView: ComponentView {
         }
     }
 
+    /// A type-erased pointer style provider.
     private var _pointerStyleProvider: Any?
+
+    /// A closure that provides a pointer style when the TappableView is hovered over with a pointer device.
+    /// Available only on iOS 13.4 and later.
     @available(iOS 13.4, *)
     public var pointerStyleProvider: (() -> UIPointerStyle?)? {
         get { _pointerStyleProvider as? () -> UIPointerStyle? }
@@ -109,22 +209,23 @@ open class TappableView: ComponentView {
     }
 #endif
 
+    /// A Boolean value that determines whether the TappableView is in a highlighted state.
+    /// Changes to this property can trigger an update to the view's appearance.
     open var isHighlighted: Bool = false {
         didSet {
             guard isHighlighted != oldValue else { return }
-            let config = configuration ?? TappableViewConfiguration.default
-            config.onHighlightChanged?(self, isHighlighted)
+            (config ?? .default).onHighlightChanged?(self, isHighlighted)
         }
     }
 
     public override init(frame: CGRect) {
         super.init(frame: frame)
         accessibilityTraits = .button
-#if !os(tvOS)
+    #if !os(tvOS)
         if #available(iOS 13.4, *) {
             addInteraction(UIPointerInteraction(delegate: self))
         }
-#endif
+    #endif
     }
 
     required public init?(coder: NSCoder) {
@@ -146,16 +247,18 @@ open class TappableView: ComponentView {
         isHighlighted = false
     }
 
+    /// Called when a tap is recognized.
     @objc open func didTap() {
-        let config = configuration ?? TappableViewConfiguration.default
-        config.didTap?(self)
+        (config ?? .default).didTap?(self)
         onTap?(self)
     }
 
+    /// Called when a double tap is recognized.
     @objc open func didDoubleTap() {
         onDoubleTap?(self)
     }
 
+    /// Called when a long press is recognized.
     @objc open func didLongPress() {
         onLongPress?(self, longPressGestureRecognizer)
     }
@@ -190,7 +293,7 @@ extension TappableView: UIContextMenuInteractionDelegate {
         }
     }
 
-    public func contextMenuInteraction(_ interaction: UIContextMenuInteraction, previewForHighlightingMenuWithConfiguration configuration: UIContextMenuConfiguration)
+    public func contextMenuInteraction(_ interaction: UIContextMenuInteraction, previewForHighlightingMenuWithConfiguration config: UIContextMenuConfiguration)
         -> UITargetedPreview?
     {
         if let previewBackgroundColor {
@@ -203,7 +306,7 @@ extension TappableView: UIContextMenuInteractionDelegate {
 
     public func contextMenuInteraction(
         _ interaction: UIContextMenuInteraction,
-        willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration,
+        willPerformPreviewActionForMenuWith config: UIContextMenuConfiguration,
         animator: UIContextMenuInteractionCommitAnimating
     ) {
         if let onCommitPreview {
@@ -216,24 +319,3 @@ extension TappableView: UIContextMenuInteractionDelegate {
     }
 }
 #endif
-
-extension Component {
-    public func tappableView(
-        configuration: TappableViewConfiguration? = nil,
-        _ onTap: @escaping (TappableView) -> Void
-    ) -> ModifierComponent<ComponentViewComponent<TappableView>, UpdateRenderNode<ComponentViewRenderNode<TappableView>>> {
-        ComponentViewComponent<TappableView>(component: self)
-            .update {
-                $0.onTap = onTap
-                $0.configuration = configuration
-            }
-    }
-    public func tappableView(
-        configuration: TappableViewConfiguration? = nil,
-        _ onTap: @escaping () -> Void
-    ) -> ModifierComponent<ComponentViewComponent<TappableView>, UpdateRenderNode<ComponentViewRenderNode<TappableView>>> {
-        tappableView(configuration: configuration) { _ in
-            onTap()
-        }
-    }
-}
